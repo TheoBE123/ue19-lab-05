@@ -1,0 +1,43 @@
+name: Build, Scan and Publish Docker Image
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write   # nécessaire pour publier l'image
+      security-events: write  # nécessaire pour publier les résultats du scan
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/ue19-lab-05:latest .
+
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/ue19-lab-05:latest
+          format: table
+          exit-code: 1          # Fail si vulnérabilités critiques/hautes
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+
+      - name: Push Docker image (only if scan passed)
+        if: success()
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/ue19-lab-05:latest
